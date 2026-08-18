@@ -26,3 +26,7 @@ outputs/*
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Pytest
+.pytest_cache/
+
