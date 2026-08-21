@@ -21,6 +21,16 @@ data/generated/*.parquet
 data/runtime/*
 outputs/*
 
+# App-ready synthetic datasets required for Streamlit deployment
+!data/generated/pricing_recommendations.parquet
+!data/generated/pricing_scenarios.parquet
+!data/generated/pricing_demand_history.parquet
+!data/generated/elasticity_eligibility.parquet
+!data/generated/sku_elasticity_estimates.parquet
+!data/generated/class_elasticity_estimates.parquet
+!data/generated/decision_elasticity.parquet
+!data/generated/calibrated_decision_elasticity.parquet
+
 # Jupyter
 .ipynb_checkpoints/
 
