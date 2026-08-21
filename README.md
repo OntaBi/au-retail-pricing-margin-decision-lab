@@ -24,6 +24,7 @@ This project builds an analytical decision system around the questions that foll
 - How sensitive is expected demand to a change in price?
 - Should the business increase, hold, reduce or manually review price?
 - What happens to units, sales and margin under alternative price points?
+- What if a commercial user chooses a different price from the model recommendation?
 - How strong is the evidence supporting the elasticity signal and recommendation?
 
 The synthetic environment contains **1,500 SKUs** with a **two-year daily pricing and demand history**, competitor pricing, cost and margin history, hierarchical elasticity estimation, commercial calibration, scenario modelling, explainable pricing recommendations and automated QA.
@@ -74,7 +75,7 @@ The central design principle is:
 </details>
 
 <details>
-<summary><strong>Scenario Explorer</strong> — What happens to demand, sales and margin if we change the price?</summary>
+<summary><strong>Scenario Explorer</strong> — What happens if we accept the model price or test our own?</summary>
 
 <br>
 
@@ -128,7 +129,15 @@ For a selected SKU, the scenario engine evaluates alternative sell prices using 
 
 Outputs include expected unit response, 28-day units, 28-day sales, 28-day gross margin, margin %, competitor price index and recommended price impact versus the current position.
 
-The objective is to make the trade-off explicit. A price reduction may improve competitiveness and demand while reducing gross margin dollars; a price increase may improve unit economics while weakening demand or competitive position.
+The **Custom Price What-If** extends the model recommendation into an interactive commercial decision tool. A user can enter a proposed sell price and compare three positions side by side:
+
+- **Current** — the SKU's existing commercial position
+- **Model Recommendation** — the price selected by the decision engine
+- **Your Scenario** — a user-defined sell price
+
+The custom scenario recalculates expected unit impact, competitive price position, 28-day units, sales, margin %, gross margin and incremental margin versus current. Price-response curves provide additional context around how demand and gross margin are expected to change across a range of alternative price points.
+
+The objective is to make the trade-off explicit rather than treating the model recommendation as an instruction. A price reduction may improve competitiveness and demand while reducing gross margin dollars; a price increase may improve unit economics while weakening demand or competitive position.
 
 ### 4. Margin & Competition
 
@@ -234,10 +243,16 @@ The project includes automated tests covering the core pricing and demand logic.
 Current test suite:
 
 ```text
-20 passed
+23 passed
 ```
 
 Tests cover competitor price construction, price-index and price-gap calculations, daily demand integrity, sales and gross-margin reconciliation, expected demand response to price, price-response event logic, pricing recommendation guardrails, one recommendation per SKU and valid recommendation actions.
+
+The custom price scenario logic is also tested for three core commercial behaviours:
+
+- holding the current price produces no incremental commercial impact
+- increasing price reduces expected units according to elasticity and recalculates gross margin
+- reducing price increases expected units and improves the competitive price index
 
 ## Reproducibility
 
@@ -282,6 +297,7 @@ This is a portfolio decision-analytics prototype rather than a production pricin
 - no inventory or supply constraint in the pricing optimiser
 - no tax, channel or location-specific pricing complexity
 - commercial guardrails are analytical assumptions rather than production-calibrated rules
+- custom price scenarios assume the calibrated elasticity signal applies across the tested price range
 - scenario outputs demonstrate model behaviour rather than recommended real-world price changes
 
 ## Potential Next Steps
@@ -292,7 +308,7 @@ Production-oriented extensions could include promotional and markdown effectiven
 
 **Analytics & Data Science:** business problem framing, synthetic data design, demand-response modelling, elasticity estimation, statistical diagnostics, hierarchical evidence selection, model calibration and validation.
 
-**Decision Analytics:** competitor price analysis, margin analysis, cost pass-through, explainable pricing recommendations, commercial guardrails, scenario modelling, price-response trade-offs and decision prioritisation.
+**Decision Analytics:** competitor price analysis, margin analysis, cost pass-through, explainable pricing recommendations, commercial guardrails, custom price what-if analysis, scenario modelling, price-response trade-offs and decision prioritisation.
 
 **Analytics Engineering:** modular Python development, parquet-based analytical datasets, automated testing, Streamlit application development, reusable filters, Git-ready project organisation and technical documentation.
 

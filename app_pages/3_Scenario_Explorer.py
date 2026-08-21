@@ -6,6 +6,10 @@ import streamlit as st
 
 from src.app.filters import render_pricing_filters
 
+from src.app.scenario_math import (
+    calculate_custom_price_scenario,
+)
+
 
 # =========================================================
 # PATHS
@@ -64,6 +68,59 @@ def load_scenarios() -> pd.DataFrame:
 
 recommendations = load_recommendations()
 scenarios = load_scenarios()
+
+
+# =========================================================
+# HELPERS
+# =========================================================
+
+def format_signed_currency(
+    value: float,
+) -> str:
+
+    if value > 0:
+        return f"+${value:,.0f}"
+
+    if value < 0:
+        return f"-${abs(value):,.0f}"
+
+    return "$0"
+
+
+def format_currency(
+    value: float,
+) -> str:
+
+    return f"${value:,.0f}"
+
+
+def format_price(
+    value: float,
+) -> str:
+
+    return f"${value:,.2f}"
+
+
+def format_signed_pct(
+    value: float,
+    decimals: int = 1,
+) -> str:
+
+    if abs(value) < 0.0000001:
+        value = 0.0
+
+    return f"{value:+.{decimals}%}"
+
+
+def format_pct(
+    value: float,
+    decimals: int = 1,
+) -> str:
+
+    if abs(value) < 0.0000001:
+        value = 0.0
+
+    return f"{value:.{decimals}%}"
 
 
 # =========================================================
@@ -148,6 +205,94 @@ if sku_scenarios.empty:
     st.stop()
 
 
+current_scenario = (
+    sku_scenarios[
+        sku_scenarios[
+            "price_change_pct"
+        ]
+        == 0
+    ]
+    .iloc[0]
+)
+
+
+# =========================================================
+# CORE SKU VALUES
+# =========================================================
+
+current_price = (
+    recommendation[
+        "current_sell_price"
+    ]
+)
+
+recommended_price = (
+    recommendation[
+        "recommended_sell_price"
+    ]
+)
+
+recommended_price_change = (
+    recommendation[
+        "recommended_price_change_pct"
+    ]
+)
+
+competitor_price = (
+    recommendation[
+        "competitor_price"
+    ]
+)
+
+current_price_index = (
+    recommendation[
+        "current_price_index"
+    ]
+)
+
+current_margin_pct = (
+    recommendation[
+        "current_margin_pct"
+    ]
+)
+
+elasticity = (
+    recommendation[
+        "calibrated_elasticity"
+    ]
+)
+
+confidence = (
+    recommendation[
+        "decision_confidence"
+    ]
+)
+
+cost_price = (
+    current_scenario[
+        "cost_price"
+    ]
+)
+
+current_28d_units = (
+    current_scenario[
+        "scenario_28d_units"
+    ]
+)
+
+current_28d_sales = (
+    current_scenario[
+        "scenario_28d_sales"
+    ]
+)
+
+current_28d_margin = (
+    current_scenario[
+        "scenario_28d_margin"
+    ]
+)
+
+
 # =========================================================
 # PAGE HEADER
 # =========================================================
@@ -193,58 +338,6 @@ st.write(
 
 st.subheader(
     "Current product position"
-)
-
-current_price = (
-    recommendation[
-        "current_sell_price"
-    ]
-)
-
-competitor_price = (
-    recommendation[
-        "competitor_price"
-    ]
-)
-
-current_price_index = (
-    recommendation[
-        "current_price_index"
-    ]
-)
-
-current_margin_pct = (
-    recommendation[
-        "current_margin_pct"
-    ]
-)
-
-elasticity = (
-    recommendation[
-        "calibrated_elasticity"
-    ]
-)
-
-confidence = (
-    recommendation[
-        "decision_confidence"
-    ]
-)
-
-current_scenario = (
-    sku_scenarios[
-        sku_scenarios[
-            "price_change_pct"
-        ]
-        == 0
-    ]
-    .iloc[0]
-)
-
-cost_price = (
-    current_scenario[
-        "cost_price"
-    ]
 )
 
 
@@ -309,9 +402,9 @@ with action_col:
 
     st.metric(
         "Recommended Price",
-        f"${recommendation['recommended_sell_price']:,.2f}",
+        f"${recommended_price:,.2f}",
         delta=(
-            f"{recommendation['recommended_price_change_pct']:+.1%}"
+            f"{recommended_price_change:+.1%}"
         ),
     )
 
@@ -332,6 +425,412 @@ with reason_col:
         f"{recommendation['decision_confidence']} | "
         f"Evidence source: "
         f"{recommendation['decision_source']}"
+    )
+
+
+# =========================================================
+# CUSTOM PRICE WHAT-IF
+# =========================================================
+
+st.subheader(
+    "Custom Price What-If"
+)
+
+st.caption(
+    "Test a commercial price different from the model recommendation "
+    "and quantify the expected demand, competitive and margin trade-off."
+)
+
+
+whatif_input_col, whatif_context_col = (
+    st.columns(
+        [1, 2]
+    )
+)
+
+
+with whatif_input_col:
+
+    proposed_price = st.number_input(
+        "Proposed Sell Price ($)",
+        min_value=0.01,
+        value=float(
+            round(
+                recommended_price,
+                2,
+            )
+        ),
+        step=0.01,
+        format="%.2f",
+        key=f"whatif_price_{selected_sku}",
+    )
+
+
+with whatif_context_col:
+
+    st.markdown(
+        "**Reference prices**"
+    )
+
+    ref1, ref2, ref3 = st.columns(3)
+
+    ref1.metric(
+        "Current",
+        f"${current_price:,.2f}",
+    )
+
+    ref2.metric(
+        "Model Recommendation",
+        f"${recommended_price:,.2f}",
+    )
+
+    ref3.metric(
+        "Competitor",
+        f"${competitor_price:,.2f}",
+    )
+
+
+# =========================================================
+# CUSTOM SCENARIO CALCULATION
+# =========================================================
+
+custom_scenario = (
+    calculate_custom_price_scenario(
+        current_price=current_price,
+        proposed_price=proposed_price,
+        competitor_price=competitor_price,
+        cost_price=cost_price,
+        elasticity=elasticity,
+        current_28d_units=current_28d_units,
+        current_28d_sales=current_28d_sales,
+        current_28d_margin=current_28d_margin,
+    )
+)
+
+
+custom_price_change_pct = (
+    custom_scenario[
+        "price_change_pct"
+    ]
+)
+
+custom_expected_unit_change_pct = (
+    custom_scenario[
+        "expected_unit_change_pct"
+    ]
+)
+
+custom_28d_units = (
+    custom_scenario[
+        "scenario_28d_units"
+    ]
+)
+
+custom_28d_sales = (
+    custom_scenario[
+        "scenario_28d_sales"
+    ]
+)
+
+custom_28d_margin = (
+    custom_scenario[
+        "scenario_28d_margin"
+    ]
+)
+
+custom_margin_pct = (
+    custom_scenario[
+        "scenario_margin_pct"
+    ]
+)
+
+custom_price_index = (
+    custom_scenario[
+        "scenario_price_index"
+    ]
+)
+
+custom_price_gap_pct = (
+    custom_price_index
+    - 1
+)
+
+custom_incremental_units = (
+    custom_scenario[
+        "incremental_units"
+    ]
+)
+
+custom_incremental_sales = (
+    custom_scenario[
+        "incremental_sales"
+    ]
+)
+
+custom_incremental_margin = (
+    custom_scenario[
+        "incremental_margin"
+    ]
+)
+
+
+# =========================================================
+# MODEL RANGE / GUARDRAILS
+# =========================================================
+
+min_model_change = (
+    sku_scenarios[
+        "price_change_pct"
+    ].min()
+)
+
+max_model_change = (
+    sku_scenarios[
+        "price_change_pct"
+    ].max()
+)
+
+
+if (
+    custom_price_change_pct
+    < min_model_change
+    or custom_price_change_pct
+    > max_model_change
+):
+
+    st.warning(
+        "Proposed price is outside the modelled scenario range "
+        f"({min_model_change:+.0%} to {max_model_change:+.0%}). "
+        "The demand response therefore represents extrapolation "
+        "and should be interpreted with additional caution."
+    )
+
+
+if proposed_price <= cost_price:
+
+    st.warning(
+        "Proposed sell price is at or below unit cost and produces "
+        "zero or negative unit margin."
+    )
+
+
+# =========================================================
+# CUSTOM SCENARIO KPIs
+# =========================================================
+
+st.markdown(
+    "**Your scenario**"
+)
+
+custom1, custom2, custom3, custom4, custom5 = (
+    st.columns(5)
+)
+
+custom1.metric(
+    "Price Change",
+    format_signed_pct(
+        custom_price_change_pct
+    ),
+)
+
+custom2.metric(
+    "vs Competitor",
+    format_signed_pct(
+        custom_price_gap_pct
+    ),
+    help=(
+        "Positive values indicate the proposed price "
+        "is above the competitor."
+    ),
+)
+
+custom3.metric(
+    "Expected Unit Impact",
+    format_signed_pct(
+        custom_expected_unit_change_pct
+    ),
+)
+
+custom4.metric(
+    "Margin %",
+    format_pct(
+        custom_margin_pct
+    ),
+)
+
+custom5.metric(
+    "28-Day Margin Impact",
+    format_signed_currency(
+        custom_incremental_margin
+    ),
+)
+
+
+# =========================================================
+# CURRENT VS RECOMMENDED VS CUSTOM
+# =========================================================
+
+st.markdown(
+    "**Current vs model recommendation vs your scenario**"
+)
+
+
+recommended_28d_units = (
+    recommendation[
+        "recommended_28d_units"
+    ]
+)
+
+recommended_28d_sales = (
+    recommendation[
+        "recommended_28d_sales"
+    ]
+)
+
+recommended_28d_margin = (
+    recommendation[
+        "recommended_28d_margin"
+    ]
+)
+
+recommended_margin_pct = (
+    recommendation[
+        "recommended_margin_pct"
+    ]
+)
+
+recommended_price_index = (
+    recommendation[
+        "recommended_price_index"
+    ]
+)
+
+recommended_price_gap_pct = (
+    recommended_price_index
+    - 1
+)
+
+
+comparison_table = pd.DataFrame(
+    {
+        "Metric": [
+            "Sell Price",
+            "vs Competitor",
+            "28-Day Units",
+            "28-Day Sales",
+            "Margin %",
+            "28-Day Margin",
+            "Margin vs Current",
+        ],
+        "Current": [
+            format_price(
+                current_price
+            ),
+            format_signed_pct(
+                current_price_index
+                - 1
+            ),
+            f"{current_28d_units:,.0f}",
+            format_currency(
+                current_28d_sales
+            ),
+            format_pct(
+                current_margin_pct
+            ),
+            format_currency(
+                current_28d_margin
+            ),
+            "—",
+        ],
+        "Model Recommendation": [
+            format_price(
+                recommended_price
+            ),
+            format_signed_pct(
+                recommended_price_gap_pct
+            ),
+            f"{recommended_28d_units:,.0f}",
+            format_currency(
+                recommended_28d_sales
+            ),
+            format_pct(
+                recommended_margin_pct
+            ),
+            format_currency(
+                recommended_28d_margin
+            ),
+            format_signed_currency(
+                recommendation[
+                    "incremental_margin"
+                ]
+            ),
+        ],
+        f"Your Scenario ({proposed_price:,.2f})": [
+            format_price(
+                proposed_price
+            ),
+            format_signed_pct(
+                custom_price_gap_pct
+            ),
+            f"{custom_28d_units:,.0f}",
+            format_currency(
+                custom_28d_sales
+            ),
+            format_pct(
+                custom_margin_pct
+            ),
+            format_currency(
+                custom_28d_margin
+            ),
+            format_signed_currency(
+                custom_incremental_margin
+            ),
+        ],
+    }
+)
+
+
+st.dataframe(
+    comparison_table,
+    hide_index=True,
+    use_container_width=True,
+)
+
+
+# =========================================================
+# CUSTOM COMMERCIAL INTERPRETATION
+# =========================================================
+
+if custom_price_index > 1.10:
+
+    st.info(
+        f"Your proposed price remains "
+        f"{custom_price_gap_pct:.1%} above the competitor. "
+        "Competitive exposure is therefore relatively high."
+    )
+
+elif custom_price_index > 1.05:
+
+    st.info(
+        f"Your proposed price is "
+        f"{custom_price_gap_pct:.1%} above the competitor. "
+        "The scenario improves or protects economics, but "
+        "competitive positioning should remain under review."
+    )
+
+elif custom_price_index >= 0.95:
+
+    st.success(
+        "Your proposed price remains broadly within the "
+        "competitive parity range."
+    )
+
+else:
+
+    st.info(
+        f"Your proposed price is "
+        f"{abs(custom_price_gap_pct):.1%} below the competitor, "
+        "indicating potential price headroom if margin economics allow."
     )
 
 
@@ -436,7 +935,32 @@ with response_col:
             )
         )
         .mark_rule(
-            strokeDash=[4, 4]
+            strokeDash=[
+                4,
+                4,
+            ]
+        )
+        .encode(
+            x="x:Q"
+        )
+    )
+
+    custom_response_rule = (
+        alt.Chart(
+            pd.DataFrame(
+                {
+                    "x": [
+                        custom_price_change_pct
+                        * 100
+                    ]
+                }
+            )
+        )
+        .mark_rule(
+            strokeDash=[
+                2,
+                2,
+            ]
         )
         .encode(
             x="x:Q"
@@ -445,13 +969,15 @@ with response_col:
 
     st.altair_chart(
         response_chart
-        + current_rule,
+        + current_rule
+        + custom_response_rule,
         use_container_width=True,
     )
 
     st.caption(
         f"Calibrated elasticity: {elasticity:.2f} | "
-        f"Confidence: {confidence}"
+        f"Confidence: {confidence} | "
+        "Dashed = current | Dotted = your scenario"
     )
 
 
@@ -534,7 +1060,10 @@ with margin_col:
             )
         )
         .mark_rule(
-            strokeDash=[4, 4]
+            strokeDash=[
+                4,
+                4,
+            ]
         )
         .encode(
             x="x:Q"
@@ -542,9 +1071,7 @@ with margin_col:
     )
 
     recommended_change = (
-        recommendation[
-            "recommended_price_change_pct"
-        ]
+        recommended_price_change
         * 100
     )
 
@@ -564,21 +1091,44 @@ with margin_col:
         )
     )
 
+    custom_margin_rule = (
+        alt.Chart(
+            pd.DataFrame(
+                {
+                    "x": [
+                        custom_price_change_pct
+                        * 100
+                    ]
+                }
+            )
+        )
+        .mark_rule(
+            strokeDash=[
+                2,
+                2,
+            ]
+        )
+        .encode(
+            x="x:Q"
+        )
+    )
+
     st.altair_chart(
         margin_chart
         + current_margin_rule
-        + recommended_rule,
+        + recommended_rule
+        + custom_margin_rule,
         use_container_width=True,
     )
 
     st.caption(
-        "Dashed reference = current price | "
-        "Solid reference = recommended price"
+        "Dashed = current | Solid = model recommendation | "
+        "Dotted = your scenario"
     )
 
 
 # =========================================================
-# SCENARIO SUMMARY KPIs
+# RECOMMENDED SCENARIO IMPACT
 # =========================================================
 
 st.subheader(
@@ -591,9 +1141,9 @@ impact1, impact2, impact3, impact4 = (
 
 impact1.metric(
     "Recommended Price",
-    f"${recommendation['recommended_sell_price']:,.2f}",
+    f"${recommended_price:,.2f}",
     delta=(
-        f"{recommendation['recommended_price_change_pct']:+.1%}"
+        f"{recommended_price_change:+.1%}"
     ),
 )
 
@@ -602,25 +1152,21 @@ impact2.metric(
     f"{recommendation['incremental_units']:+,.0f}",
 )
 
-def format_signed_currency(value: float) -> str:
-    if value > 0:
-        return f"+${value:,.0f}"
-    if value < 0:
-        return f"-${abs(value):,.0f}"
-    return "$0"
-
-
 impact3.metric(
     "28-Day Sales Impact",
     format_signed_currency(
-        recommendation["incremental_sales"]
+        recommendation[
+            "incremental_sales"
+        ]
     ),
 )
 
 impact4.metric(
     "28-Day Margin Impact",
     format_signed_currency(
-        recommendation["incremental_margin"]
+        recommendation[
+            "incremental_margin"
+        ]
     ),
 )
 
@@ -654,27 +1200,25 @@ def scenario_label(
     price_change: float,
 ) -> str:
 
-    recommended_change = (
-        recommendation[
-            "recommended_price_change_pct"
-        ]
-    )
-
     if abs(
         price_change
-        - recommended_change
+        - recommended_price_change
     ) < 1e-9:
 
         if abs(
             price_change
         ) < 1e-9:
-            return "Current / Recommended"
+
+            return (
+                "Current / Recommended"
+            )
 
         return "Recommended"
 
     if abs(
         price_change
     ) < 1e-9:
+
         return "Current"
 
     return f"{price_change:+.1%}"
@@ -698,7 +1242,7 @@ scenario_table[
         "price_change_pct"
     ]
     .map(
-        lambda x: f"{x:+.1%}"
+        format_signed_pct
     )
 )
 
@@ -709,7 +1253,7 @@ scenario_table[
         "scenario_sell_price"
     ]
     .map(
-        lambda x: f"${x:,.2f}"
+        format_price
     )
 )
 
@@ -720,7 +1264,7 @@ scenario_table[
         "expected_unit_change_pct"
     ]
     .map(
-        lambda x: f"{x:+.1%}"
+        format_signed_pct
     )
 )
 
@@ -742,7 +1286,7 @@ scenario_table[
         "scenario_28d_sales"
     ]
     .map(
-        lambda x: f"${x:,.0f}"
+        format_currency
     )
 )
 
@@ -753,7 +1297,7 @@ scenario_table[
         "scenario_28d_margin"
     ]
     .map(
-        lambda x: f"${x:,.0f}"
+        format_currency
     )
 )
 
@@ -764,7 +1308,7 @@ scenario_table[
         "scenario_margin_pct"
     ]
     .map(
-        lambda x: f"{x:.1%}"
+        format_pct
     )
 )
 
@@ -818,9 +1362,10 @@ if (
 ):
 
     st.write(
-        "The recommended increase is expected to improve "
-        "gross margin despite lower unit demand, while remaining "
-        "within the configured competitive and demand-risk guardrails."
+        "The model recommendation increases price because the "
+        "expected gross-margin improvement remains material after "
+        "allowing for lower unit demand, while competitive and "
+        "demand-risk guardrails remain acceptable."
     )
 
 elif (
@@ -832,8 +1377,9 @@ elif (
 
     st.write(
         "The SKU is currently priced materially above the competitor. "
-        "The recommended price investment improves competitive position "
-        "while keeping the expected margin trade-off within tolerance."
+        "The model recommendation invests in price to improve competitive "
+        "position while keeping the expected margin trade-off within "
+        "configured commercial tolerance."
     )
 
 elif (
@@ -844,17 +1390,24 @@ elif (
 ):
 
     st.write(
-        "The SKU remains competitively exposed, but available price "
+        "The SKU remains competitively exposed, but the modelled price "
         "reductions do not currently meet the commercial margin guardrails. "
-        "Further review is recommended."
+        "Further pricing review is recommended."
     )
 
 else:
 
     st.write(
-        "No alternative scenario provides a sufficiently material "
-        "commercial improvement within the current pricing guardrails."
+        "No alternative modelled scenario provides a sufficiently "
+        "material commercial improvement within the current pricing "
+        "guardrails."
     )
+
+st.caption(
+    "The Custom Price What-If allows a commercial user to challenge "
+    "the model recommendation and quantify the expected trade-off "
+    "without changing the underlying recommendation engine."
+)
 
 
 # =========================================================
@@ -866,5 +1419,7 @@ st.divider()
 st.caption(
     "Scenario outputs use calibrated price elasticity to estimate "
     "demand response across alternative sell prices. Commercial "
-    "impacts represent a 28-day scenario horizon."
+    "impacts represent a 28-day scenario horizon. Custom prices "
+    "outside the modelled scenario range represent extrapolation "
+    "and should be interpreted cautiously."
 )
