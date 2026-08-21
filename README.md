@@ -6,6 +6,12 @@ The project connects **cost movement → competitor position → price elasticit
 
 > **Data note:** All SKU, price, cost, competitor, demand and elasticity records are synthetic. The project demonstrates analytical and decision-engineering methods, not observed retailer performance.
 
+## Live Demo
+
+🚀 **[Launch the AU Retail Pricing & Margin Decision Lab](https://au-retail-pricing-lab.streamlit.app/)**
+
+Explore Executive Overview, Recommendation Queue, Scenario Explorer, Margin & Competition and Model Diagnostics interactively.
+
 ## Executive Summary
 
 Pricing is not simply a margin calculation. A retailer can protect unit margin while becoming materially uncompetitive, or invest in price without generating enough incremental demand to justify the margin trade-off.
